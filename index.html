@@ -126,10 +126,11 @@
     stroke-linecap:round;
     fill:none;
   }
-  .route-line.path-line{
+  .path-arrow-line{
     stroke:var(--pathcolor);
     stroke-width:5;
-    stroke-dasharray:none;
+    stroke-linecap:round;
+    fill:none;
     opacity:0.9;
   }
   .node{cursor:pointer;}
@@ -621,6 +622,23 @@ const NS = 'http://www.w3.org/2000/svg';
 
 function draw(){
   svg.innerHTML='';
+
+  const defs = document.createElementNS(NS,'defs');
+  defs.innerHTML = `
+    <marker id="pathArrow" viewBox="0 0 10 10" refX="8" refY="5"
+      markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--pathcolor)"></path>
+    </marker>`;
+  svg.appendChild(defs);
+
+  const linesLayer = document.createElementNS(NS,'g');
+  linesLayer.setAttribute('id','linesLayer');
+  svg.appendChild(linesLayer);
+
+  const nodesLayer = document.createElementNS(NS,'g');
+  nodesLayer.setAttribute('id','nodesLayer');
+  svg.appendChild(nodesLayer);
+
   // links (draw once per pair)
   const drawn = new Set();
   LOCS.forEach(loc=>{
@@ -635,7 +653,7 @@ function draw(){
       line.setAttribute('x2', t.x); line.setAttribute('y2', t.y);
       line.setAttribute('class','route-line');
       line.setAttribute('data-key', key);
-      svg.appendChild(line);
+      linesLayer.appendChild(line);
     });
   });
   // nodes
@@ -663,7 +681,7 @@ function draw(){
     g.appendChild(label);
 
     g.addEventListener('click', ()=>selectLoc(loc.id));
-    svg.appendChild(g);
+    nodesLayer.appendChild(g);
   });
 }
 draw();
@@ -967,7 +985,7 @@ function shortestPath(startId, endId){
 
 function clearPathHighlight(){
   document.querySelectorAll('.node').forEach(n=>n.classList.remove('on-path'));
-  document.querySelectorAll('.route-line').forEach(l=>l.classList.remove('path-line'));
+  document.querySelectorAll('.path-arrow-line').forEach(l=>l.remove());
 }
 
 function showRoute(){
@@ -987,11 +1005,25 @@ function showRoute(){
     const el = document.querySelector(`.node[data-id="${id}"]`);
     if(el) el.classList.add('on-path');
   });
+
+  const linesLayer = document.getElementById('linesLayer');
   for(let i=0; i<path.length-1; i++){
-    const key = [path[i], path[i+1]].sort().join('|');
-    const line = document.querySelector(`.route-line[data-key="${key}"]`);
-    if(line) line.classList.add('path-line');
+    const a = byId[path[i]], b = byId[path[i+1]];
+    // Pull the arrow's endpoint in slightly so it doesn't hide under the destination node's ring.
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const pullBack = (b.cat === 'city' ? 16 : 13);
+    const ex = b.x - (dx/dist) * pullBack;
+    const ey = b.y - (dy/dist) * pullBack;
+
+    const arrowLine = document.createElementNS(NS,'line');
+    arrowLine.setAttribute('x1', a.x); arrowLine.setAttribute('y1', a.y);
+    arrowLine.setAttribute('x2', ex); arrowLine.setAttribute('y2', ey);
+    arrowLine.setAttribute('class','path-arrow-line');
+    arrowLine.setAttribute('marker-end','url(#pathArrow)');
+    linesLayer.appendChild(arrowLine);
   }
+
   const stops = path.length - 2 > 0 ? path.length - 2 : 0;
   const steps = path.map(id => `<span class="path-step">${byId[id].name}</span>`).join('<span style="opacity:.5;">→</span>');
   routeResult.innerHTML = `
